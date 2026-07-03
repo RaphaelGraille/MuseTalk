@@ -16,3 +16,4 @@ imageio[ffmpeg]
 omegaconf
 ffmpeg-python
 moviepy
+decord
