@@ -8,6 +8,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from diffusers import AutoencoderKL, UNet2DConditionModel
 from transformers import WhisperModel
 from diffusers.optimization import get_scheduler
+from peft import LoraConfig
 from omegaconf import OmegaConf
 from einops import rearrange
 
@@ -81,7 +82,21 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
     unet_params = [p.numel() for n, p in model_dict['unet'].named_parameters()]
     logger.info(f"unet {sum(unet_params) / 1e6}M-parameter")
     
+    do_finetune = cfg.has_key("finetune") and cfg.finetune
+
     model_dict['vae'].requires_grad_(False)
+    if do_finetune:
+        model_dict['unet'].requires_grad_(False)
+        unet_lora_config = LoraConfig(
+            r=cfg.finetune.rank,
+            lora_alpha=cfg.finetune.rank,
+            init_lora_weights="gaussian",
+            target_modules=["to_k", "to_q", "to_v", "to_out.0"]
+        )
+
+        model_dict['unet'].add_adapter(unet_lora_config)
+        # lora_layers = filter(lambda p: p.requires_grad, model_dict['unet'].parameters())
+
     model_dict['unet'].requires_grad_(True)
 
     model_dict['vae'].to(accelerator.device, dtype=weight_dtype)
