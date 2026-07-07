@@ -6,18 +6,20 @@
 # Example: sh train.sh stage1  # To run stage 1 training
 # Example: sh train.sh stage2  # To run stage 2 training
 
+export CUDA_VISIBLE_DEVICES=0
+
 # Check if stage argument is provided
 if [ $# -ne 1 ]; then
     echo "Error: Please specify the training stage"
-    echo "Usage: ./train.sh [stage1|stage2]"
+    echo "Usage: ./train.sh [stage1|stage2|finetune]"
     exit 1
 fi
 
 STAGE=$1
 
 # Validate stage argument
-if [ "$STAGE" != "stage1" ] && [ "$STAGE" != "stage2" ]; then
-    echo "Error: Invalid stage. Must be either 'stage1' or 'stage2'"
+if [ "$STAGE" != "stage1" ] && [ "$STAGE" != "stage2" ] && [ "$STAGE" != "finetune" ]; then
+    echo "Error: Invalid stage. Must be either 'stage1', 'stage2' or finetune"
     exit 1
 fi
 
