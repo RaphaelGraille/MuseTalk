@@ -21,7 +21,7 @@ num_backward_frames: 16  # Number of frames to use for backward pass in SyncNet
 finetune:
   enabled: True  # Whether to perform fine-tuning
   rank: 4
-  alpha:
+  alpha: 4
 
 data:
   dataset_key: "finetune"  # Dataset to use for training
@@ -66,7 +66,7 @@ discriminator_train_params:
   start_gan: 1000  # Step to start GAN training
 
 solver:
-  gradient_accumulation_steps: 8  # Number of steps for gradient accumulation
+  gradient_accumulation_steps: 1  # Number of steps for gradient accumulation
   uncond_steps: 10  # Number of unconditional steps
   mixed_precision: 'fp32'  # Precision mode for training
   enable_xformers_memory_efficient_attention: True  # Whether to use memory efficient attention
