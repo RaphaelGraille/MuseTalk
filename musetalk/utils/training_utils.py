@@ -82,7 +82,7 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
     unet_params = [p.numel() for n, p in model_dict['unet'].named_parameters()]
     logger.info(f"unet {sum(unet_params) / 1e6}M-parameter")
     
-    do_finetune = cfg.has_key("finetune") and cfg.finetune
+    do_finetune = "finetune" in cfg and cfg.finetune
 
     model_dict['vae'].requires_grad_(False)
     if do_finetune:
