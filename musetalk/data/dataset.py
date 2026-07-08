@@ -43,7 +43,7 @@ class FaceDataset(Dataset):
         for list_path, repeat_time in zip(list_paths, repeats):
             with open(list_path, 'r') as f:
                 num = 0
-                f.readline()  # Skip header line
+                # f.readline()  # Skip header line
                 for line in f.readlines():
                     line_info = line.strip()
                     meta = line_info.split()
