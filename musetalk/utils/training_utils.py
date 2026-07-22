@@ -109,6 +109,7 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
 
     if cfg.solver.gradient_checkpointing:
         model_dict['unet'].enable_gradient_checkpointing()
+        model_dict['vae'].enable_gradient_checkpointing()
 
     if cfg.solver.scale_lr:
         learning_rate = (
