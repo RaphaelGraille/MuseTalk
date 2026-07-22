@@ -96,8 +96,8 @@ def initialize_models_and_optimizers(cfg, accelerator, weight_dtype):
 
         model_dict['unet'].add_adapter(unet_lora_config)
         # lora_layers = filter(lambda p: p.requires_grad, model_dict['unet'].parameters())
-
-    model_dict['unet'].requires_grad_(True)
+    else:
+        model_dict['unet'].requires_grad_(True)
 
     model_dict['vae'].to(accelerator.device, dtype=weight_dtype)
 
