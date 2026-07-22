@@ -76,6 +76,9 @@ def main(cfg):
         transformers.utils.logging.set_verbosity_error()
         diffusers.utils.logging.set_verbosity_error()
 
+    if getattr(accelerator.state, "deepspeed_plugin", None):
+        print("YOUPIIIIIIIIIII")
+
     # If passed along, set the training seed now.
     if cfg.seed is not None:
         print('cfg.seed', cfg.seed, accelerator.process_index)
