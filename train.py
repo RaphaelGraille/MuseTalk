@@ -43,6 +43,8 @@ from musetalk.utils.training_utils import (
     validation
 )
 
+from torch.utils.checkpoint import checkpoint
+
 logger = get_logger(__name__, log_level="INFO")
 warnings.filterwarnings("ignore")
 check_min_version("0.10.0.dev0")
@@ -317,6 +319,7 @@ def main(cfg):
             latents_pred = (1 / model_dict['vae'].config.scaling_factor) * latents_pred
             latents_pred = latents_pred.to(weight_dtype)
             # image_pred = model_dict['vae'].decode(latents_pred).sample
+            image_pred = checkpoint(model_dict['vae'].decode, latents_pred, use_reentrant=False).sample
             
             # Convert to float
             image_pred = image_pred.float()
