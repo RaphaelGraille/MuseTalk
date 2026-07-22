@@ -525,9 +525,9 @@ class VFHQDataset(FaceDataset):
 class FinetuneDataset(FaceDataset):
     """Finetune dataset class"""
     def __init__(self, cfg):
-        root_path = './dataset/finetune/meta'
+        root_path = f'./dataset/{cfg["dataset_key"]}/meta'
         list_paths = [
-            './dataset/finetune/train.txt',
+            f'./dataset/{cfg["dataset_key"]}/train.txt',
         ]
         repeats = [10]
         super().__init__(cfg, list_paths, root_path, repeats)
@@ -549,9 +549,11 @@ def PortraitDataset(cfg=None):
     elif cfg["dataset_key"] == "all":
         print("############ use all dataset ############ ")
         return ConcatDataset([HDTFDataset(cfg), VFHQDataset(cfg)])
-    elif cfg["dataset_key"] == "finetune":
+    elif "finetune" in cfg["dataset_key"]:
         print("############ use finetune dataset ############ ")
-        return ConcatDataset([FinetuneDataset(cfg)])
+        return ConcatDataset([(FinetuneDataset)(cfg)])
+    else:
+        raise ValueError(f"Invalid dataset_key: {cfg['dataset_key']}")
 
 
 if __name__ == '__main__':
