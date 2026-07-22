@@ -197,109 +197,116 @@ def main(cfg):
             t_data = time.time() - t_data_start
             t_model_start = time.time()
 
+            # with torch.no_grad():
+            # Process input data
+            pixel_values = batch["pixel_values_vid"].to(weight_dtype).to(
+                accelerator.device, 
+                non_blocking=True
+            )
+            bsz, num_frames, c, h, w = pixel_values.shape
+            
+            # Process reference images
+            ref_pixel_values = batch["pixel_values_ref_img"].to(weight_dtype).to(
+                accelerator.device, 
+                non_blocking=True
+            )
+            
+            # Get face mask for GAN
+            pixel_values_face_mask = batch['pixel_values_face_mask']
+            
+            # Process audio features
             with torch.no_grad():
-                # Process input data
-                pixel_values = batch["pixel_values_vid"].to(weight_dtype).to(
-                    accelerator.device, 
-                    non_blocking=True
-                )
-                bsz, num_frames, c, h, w = pixel_values.shape
-                
-                # Process reference images
-                ref_pixel_values = batch["pixel_values_ref_img"].to(weight_dtype).to(
-                    accelerator.device, 
-                    non_blocking=True
-                )
-                
-                # Get face mask for GAN
-                pixel_values_face_mask = batch['pixel_values_face_mask']
-                
-                # Process audio features
                 audio_prompts = process_audio_features(cfg, batch, model_dict['wav2vec'], bsz, num_frames, weight_dtype)
+            
+            # Initialize adapted weight
+            adapted_weight = 1
+            
+            # Process sync loss if enabled
+            if cfg.loss_params.sync_loss > 0:
+                mels = batch['mel'].to(weight_dtype)
+                # Prepare frames for latentsync (combine channels and frames)
+                gt_frames = rearrange(pixel_values, 'b f c h w-> b (f c) h w')
+                # Use lower half of face for latentsync
+                height = gt_frames.shape[2]
+                gt_frames = gt_frames[:, :, height // 2:, :]
                 
-                # Initialize adapted weight
-                adapted_weight = 1
+                # Get audio embeddings
+                audio_embed = syncnet.get_audio_embed(mels)
                 
-                # Process sync loss if enabled
-                if cfg.loss_params.sync_loss > 0:
-                    mels = batch['mel']
-                    # Prepare frames for latentsync (combine channels and frames)
-                    gt_frames = rearrange(pixel_values, 'b f c h w-> b (f c) h w')
-                    # Use lower half of face for latentsync
-                    height = gt_frames.shape[2]
-                    gt_frames = gt_frames[:, :, height // 2:, :]
+                # Calculate adapted weight based on audio-visual similarity
+                if cfg.use_adapted_weight:
+                    vision_embed_gt = syncnet.get_vision_embed(gt_frames)
+                    image_audio_sim_gt = F.cosine_similarity(
+                        audio_embed, 
+                        vision_embed_gt, 
+                        dim=1
+                    )[0]
                     
-                    # Get audio embeddings
-                    audio_embed = syncnet.get_audio_embed(mels)
-                    
-                    # Calculate adapted weight based on audio-visual similarity
-                    if cfg.use_adapted_weight:
-                        vision_embed_gt = syncnet.get_vision_embed(gt_frames)
-                        image_audio_sim_gt = F.cosine_similarity(
-                            audio_embed, 
-                            vision_embed_gt, 
-                            dim=1
-                        )[0]
-                        
-                        if image_audio_sim_gt < 0.05 or image_audio_sim_gt > 0.65:
-                            if cfg.adapted_weight_type == "cut_off":
-                                adapted_weight = 0.0  # Skip this batch
-                                print(
-                                    f"\nThe i-a similarity in step {global_step} is {image_audio_sim_gt}, set adapted_weight to {adapted_weight}.")
-                            elif cfg.adapted_weight_type == "linear":
-                                adapted_weight = image_audio_sim_gt
-                            else:
-                                print(f"unknown adapted_weight_type: {cfg.adapted_weight_type}")
-                                adapted_weight = 1
-                    
-                    # Random frame selection for memory efficiency
-                    max_start = 16 - cfg.num_backward_frames
-                    frames_left_index = random.randint(0, max_start) if max_start > 0 else 0
-                    frames_right_index = frames_left_index + cfg.num_backward_frames         
-                else:
-                    frames_left_index = 0
-                    frames_right_index = cfg.data.n_sample_frames
+                    if image_audio_sim_gt < 0.05 or image_audio_sim_gt > 0.65:
+                        if cfg.adapted_weight_type == "cut_off":
+                            adapted_weight = 0.0  # Skip this batch
+                            print(
+                                f"\nThe i-a similarity in step {global_step} is {image_audio_sim_gt}, set adapted_weight to {adapted_weight}.")
+                        elif cfg.adapted_weight_type == "linear":
+                            adapted_weight = image_audio_sim_gt
+                        else:
+                            print(f"unknown adapted_weight_type: {cfg.adapted_weight_type}")
+                            adapted_weight = 1
+                
+                # Random frame selection for memory efficiency
+                max_start = cfg.data.n_sample_frames - cfg.num_backward_frames
+                frames_left_index = random.randint(0, max_start) if max_start > 0 else 0
+                frames_right_index = frames_left_index + cfg.num_backward_frames         
+            else:
+                frames_left_index = 0
+                frames_right_index = cfg.data.n_sample_frames
 
-                # Extract frames for backward pass
-                pixel_values_backward = pixel_values[:, frames_left_index:frames_right_index, ...]
-                ref_pixel_values_backward = ref_pixel_values[:, frames_left_index:frames_right_index, ...]
-                pixel_values_face_mask_backward = pixel_values_face_mask[:, frames_left_index:frames_right_index, ...]
-                audio_prompts_backward = audio_prompts[:, frames_left_index:frames_right_index, ...]
-                
-                # Encode target images
-                frames = rearrange(pixel_values_backward, 'b f c h w-> (b f) c h w')
+            # Extract frames for backward pass
+            pixel_values_backward = pixel_values[:, frames_left_index:frames_right_index, ...]
+            ref_pixel_values_backward = ref_pixel_values[:, frames_left_index:frames_right_index, ...]
+            pixel_values_face_mask_backward = pixel_values_face_mask[:, frames_left_index:frames_right_index, ...]
+            audio_prompts_backward = audio_prompts[:, frames_left_index:frames_right_index, ...]
+            
+            # Encode target images
+            frames = rearrange(pixel_values_backward, 'b f c h w-> (b f) c h w')
+            with torch.no_grad():
                 latents = model_dict['vae'].encode(frames).latent_dist.mode()
-                latents = latents * model_dict['vae'].config.scaling_factor
-                latents = latents.float()
+            torch.cuda.empty_cache()
+            latents = latents * model_dict['vae'].config.scaling_factor
+            latents = latents.float()
 
-                # Create masked images
-                masked_pixel_values = pixel_values_backward.clone()
-                masked_pixel_values[:, :, :, h//2:, :] = -1
-                masked_frames = rearrange(masked_pixel_values, 'b f c h w -> (b f) c h w')
+            # Create masked images
+            masked_pixel_values = pixel_values_backward.clone()
+            masked_pixel_values[:, :, :, h//2:, :] = -1
+            masked_frames = rearrange(masked_pixel_values, 'b f c h w -> (b f) c h w')
+            with torch.no_grad():
                 masked_latents = model_dict['vae'].encode(masked_frames).latent_dist.mode()
-                masked_latents = masked_latents * model_dict['vae'].config.scaling_factor
-                masked_latents = masked_latents.float()
+            torch.cuda.empty_cache()
+            masked_latents = masked_latents * model_dict['vae'].config.scaling_factor
+            masked_latents = masked_latents.float()
 
-                # Encode reference images
-                ref_frames = rearrange(ref_pixel_values_backward, 'b f c h w-> (b f) c h w')
+            # Encode reference images
+            ref_frames = rearrange(ref_pixel_values_backward, 'b f c h w-> (b f) c h w')
+            with torch.no_grad():        
                 ref_latents = model_dict['vae'].encode(ref_frames).latent_dist.mode()
-                ref_latents = ref_latents * model_dict['vae'].config.scaling_factor
-                ref_latents = ref_latents.float()
+            torch.cuda.empty_cache()
+            ref_latents = ref_latents * model_dict['vae'].config.scaling_factor
+            ref_latents = ref_latents.float()
 
-                # Prepare face mask and audio features
-                pixel_values_face_mask_backward = rearrange(
-                    pixel_values_face_mask_backward, 
-                    "b f c h w -> (b f) c h w"
-                )
-                audio_prompts_backward = rearrange(
-                    audio_prompts_backward, 
-                    'b f c h w-> (b f) c h w'
-                )
-                audio_prompts_backward = rearrange(
-                    audio_prompts_backward, 
-                    '(b f) c h w -> (b f) (c h) w', 
-                    b=bsz
-                )
+            # Prepare face mask and audio features
+            pixel_values_face_mask_backward = rearrange(
+                pixel_values_face_mask_backward, 
+                "b f c h w -> (b f) c h w"
+            )
+            audio_prompts_backward = rearrange(
+                audio_prompts_backward, 
+                'b f c h w-> (b f) c h w'
+            )
+            audio_prompts_backward = rearrange(
+                audio_prompts_backward, 
+                '(b f) c h w -> (b f) (c h) w', 
+                b=bsz
+            )
 
             # Apply reference dropout (currently inactive)
             dropout = nn.Dropout(p=cfg.ref_dropout_rate)
