@@ -81,7 +81,7 @@ def main(cfg):
         print('cfg.seed', cfg.seed, accelerator.process_index)
         seed_everything(cfg.seed + accelerator.process_index)
 
-    weight_dtype = torch.float32
+    weight_dtype = torch.float16 if cfg.solver.mixed_precision == "fp16" else torch.float32
 
     model_dict = initialize_models_and_optimizers(cfg, accelerator, weight_dtype)
     dataloader_dict = initialize_dataloaders(cfg)
@@ -312,7 +312,8 @@ def main(cfg):
                 audio_prompts_backward,
             )
             latents_pred = (1 / model_dict['vae'].config.scaling_factor) * latents_pred
-            image_pred = model_dict['vae'].decode(latents_pred).sample
+            latents_pred = latents_pred.to(weight_dtype)
+            # image_pred = model_dict['vae'].decode(latents_pred).sample
             
             # Convert to float
             image_pred = image_pred.float()
@@ -407,9 +408,9 @@ def main(cfg):
                     image_pred, '(b f) c h w-> b (f c) h w', f=pixel_values_backward.shape[1])
                 pred_frames = pred_frames[:, :, height // 2 :, :]
                 sync_loss, image_audio_sim_pred = get_sync_loss(
-                    audio_embed, 
-                    gt_frames, 
-                    pred_frames, 
+                    audio_embed.to(weight_dtype), 
+                    gt_frames.to(weight_dtype), 
+                    pred_frames.to(weight_dtype), 
                     syncnet, 
                     adapted_weight,
                     frames_left_index=frames_left_index,

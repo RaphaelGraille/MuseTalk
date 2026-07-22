@@ -29,7 +29,7 @@ def get_sync_loss(
         axis=1
     )
     vision_embed = syncnet.get_image_embed(frames_sync_loss)
-    y = torch.ones(frames_sync_loss.size(0), 1).float().to(audio_embed.device)
+    y = torch.ones(frames_sync_loss.size(0), 1).float().to(audio_embed.device).to(audio_embed.dtype)
     loss, score = cosine_loss(audio_embed, vision_embed, y)
     return loss, score
 
