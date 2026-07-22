@@ -1,12 +1,12 @@
 clip_len_second: 30 # the length of the video clip
-video_root_raw: "./dataset/finetune/source/" # the path of the original video
+video_root_raw: "/mnt/musetalk/Data" # the path of the original video
 val_list_hdtf:
-  - raphael_finetune3
+  - Martin-talk-3
 
 # following dir will be automatically generated
-video_root_25fps: "./dataset/finetune/video_root_25fps/"
-video_file_list: "./dataset/finetune/video_file_list.txt"
-video_audio_clip_root:  "./dataset/finetune/video_audio_clip_root/"
-meta_root: "./dataset/finetune/meta/"
-video_clip_file_list_train: "./dataset/finetune/train.txt"
-video_clip_file_list_val: "./dataset/finetune/val.txt"
+video_root_25fps: "./dataset/finetune_martin/video_root_25fps/"
+video_file_list: "./dataset/finetune_martin/video_file_list.txt"
+video_audio_clip_root:  "./dataset/finetune_martin/video_audio_clip_root/"
+meta_root: "./dataset/finetune_martin/meta/"
+video_clip_file_list_train: "./dataset/finetune_martin/train.txt"
+video_clip_file_list_val: "./dataset/finetune_martin/val.txt"
