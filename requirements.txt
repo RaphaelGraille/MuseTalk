@@ -16,8 +16,10 @@ imageio[ffmpeg]
 omegaconf
 ffmpeg-python
 moviepy
+tomli==2.4.1
 # Added to make musetalk training work 
 decord
 deepspeed==0.14.0
 # Added for finetune
 peft==0.10.0
+bitsandbytes==0.44.0
